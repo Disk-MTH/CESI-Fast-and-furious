@@ -1,12 +1,26 @@
 import matplotlib.pyplot as plt
+from scipy.integrate import odeint
 import numpy as np
 import random
 
 
-class Slope:
+class MechanicalStudy:
     g = 9.81
 
-    def __init__(self, duration, interval, alpha, v0, p0, mu=0.0, is_alpha_degrees=False):
+    def __init__(self, duration, interval, v0, p0):
+        if duration <= 0.0:
+            raise ValueError("duration must be positive")
+
+        if interval <= 0.0:
+            raise ValueError("interval must be positive")
+
+        self.time = np.arange(0, duration + interval, interval)
+        self.v0 = v0
+        self.p0 = p0
+
+
+class Slope(MechanicalStudy):
+    def __init__(self, duration, interval, v0, p0, alpha, mu=0.0, is_alpha_degrees=False):
         """
         Slope simulation class constructor
         :param duration: duration of the simulation in seconds
@@ -18,22 +32,15 @@ class Slope:
         :param is_alpha_degrees: True if alpha is in degrees, False if alpha is in radians
         """
 
-        if duration <= 0.0:
-            raise ValueError("duration must be positive")
-
-        if interval <= 0.0:
-            raise ValueError("interval must be positive")
-
-        if mu < 0.0 or mu >= 1.0:
-            raise ValueError("mu must be in [0.0 ; 1[")
+        super().__init__(duration, interval, v0, p0)
 
         if is_alpha_degrees:
             alpha = np.radians(alpha)
 
-        self.time = np.arange(0, duration + interval, interval)
+        if mu < 0.0 or mu >= 1.0:
+            raise ValueError("mu must be in [0.0 ; 1[")
+
         self.alpha = alpha
-        self.v0 = v0
-        self.p0 = p0
         self.mu = mu
 
     def a(self):
@@ -42,14 +49,10 @@ class Slope:
         :return: tuple of the acceleration (ax, ay, a)
         """
 
-        if self.mu == 0.0:
-            ax = self.g * np.sin(self.alpha)
-        else:
-            ax = self.g * np.sin(self.alpha) * (1 - self.mu)
-
+        ax = self.g * np.sin(self.alpha) * (1 - self.mu)
         ay = 0
 
-        return ax, ay, np.sqrt(ax) ** 2 + ay ** 2
+        return ax, ay, np.sqrt(ax ** 2 + ay ** 2)
 
     def v(self, t):
         """
@@ -171,36 +174,68 @@ class Slope:
             raise ValueError("interval must be positive")
 
         height = np.arange(0, ceil + interval, interval)
-        plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Acceleration (m/s^2)")
+        plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Velocity (m/s)")
         plt.legend()
         plt.show()
 
 
-class Looping:
-    g = 9.81
+class Looping(MechanicalStudy):
+    def __init__(self, duration, interval, radius, mass, theta_0, v0, p0, mu=0.0, is_theta_degrees=False):
+        """
+        Looping simulation class constructor
+        :param duration: duration of the simulation in seconds
+        :param interval: interval between two points in seconds
+        :param radius: radius of the loop in meters
+        :param mass: mass of the car in kilograms
+        :param theta_0: tuple of initial angle and initial angular velocity
+        :param v0: tuple of the initial velocity (vx, vy)
+        :param p0: tuple of the initial position (px, py)
+        :param mu: coefficient of friction (0.0 for no friction)
+        :param is_theta_degrees: True if theta_0 is in degrees, False if theta_0 is in radians
+        """
 
-    def __init__(self, duration, interval, v0, p0, mu=0.0):
+        super().__init__(duration, interval, v0, p0)
 
-        if duration <= 0.0:
-            raise ValueError("duration must be positive")
+        if radius <= 0.0:
+            raise ValueError("radius must be positive")
 
-        if interval <= 0.0:
-            raise ValueError("interval must be positive")
+        if mass <= 0.0:
+            raise ValueError("mass must be positive")
+
+        if is_theta_degrees:
+            theta_0 = np.radians(theta_0[0]), np.radians(theta_0[1])
 
         if mu < 0.0 or mu >= 1.0:
             raise ValueError("mu must be in [0.0 ; 1[")
 
-        self.time = np.arange(0, duration + interval, interval)
-        self.v0 = v0
-        self.p0 = p0
+        self.mass = mass
+        self.radius = radius
+        self.theta_0 = theta_0
         self.mu = mu
+
+    def build_equation(self, y, t):
+        f, f_p = y
+
+        return [
+            f_p,
+            -self.g * np.sin(f) - self.mu * (-self.radius * f_p ** 2 * self.mass + self.g * np.cos(f) / self.mass) / self.radius
+        ]
+
+    def solv_equation(self):
+        return odeint(self.build_equation, self.theta_0, self.time)[:, 0]
+
+    def trace(self):
+        plt.plot(self.time, self.solv_equation())
+        plt.show()
 
 
 if __name__ == "__main__":
     slope = Slope(1, 0.01, 40, (0, 0), (0, 0), mu=0.002, is_alpha_degrees=True)
 
-    slope.trace(slope.get_t_at_p(1.446823159))
+    #duration, interval, radius, mass, theta_0, v0, p0, mu=0.0, is_theta_degrees=False
 
-    slope.trace_v_end_terms_of_height(5, 0.01)
+    looping = Looping(5, 0.01, 0.115, 0.03, (0, 0), (0, 0), (0, 0), mu=0.002, is_theta_degrees=True)
 
-    print(slope.get_v_end_terms_of_height(0.93)[2])
+    looping.trace()
+
+
