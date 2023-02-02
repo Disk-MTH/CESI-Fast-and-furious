@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 import numpy as np
 import random
-
+import math
 
 class MechanicalStudy:
     g = 9.81
@@ -247,6 +247,19 @@ class Looping(MechanicalStudy):
         self.v0, self.p0 = original
         return low if not v_in_ms else low * self.radius
 
+    def get_v_after_looping(self, v_in_ms=False):
+        """
+        Get the velocity after the first looping
+        :param v_in_ms: True if the result must be in m/s, False if the result must be in rad/s
+        :return: the velocity after the first looping
+        """
+        for i in range(len(self.solv_equation()[:, 0])):
+            if self.solv_equation()[:, 0][i] > self.p0 + 2 * np.pi:
+                if not v_in_ms:
+                    return self.solv_equation()[:, 1][i]
+                else:
+                    return self.solv_equation()[:, 1][i] * self.radius
+
     def trace(self, p_in_degrees=False, v_in_ms=False):
         """
         Trace the angular position and angular velocity
@@ -335,16 +348,23 @@ class Ravine(MechanicalStudy):
         Trace the position and velocity
         """
 
-        fig, (row_1, row_2) = plt.subplots(2, 1)
-        fig.subplots_adjust(hspace=0.5)
+        path = plt.subplot2grid((2, 2), (0, 0), colspan=2)
+        velocity = plt.subplot2grid((2, 2), (1, 0))
+        position = plt.subplot2grid((2, 2), (1, 1))
 
-        row_1.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
-        row_1.set_title("Velocity as a function of time")
-        row_1.legend()
+        plt.subplots_adjust(wspace=0.5, hspace=0.5)
 
-        row_2.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
-        row_2.set_title("Position as a function of time")
-        row_2.legend()
+        path.plot(self.solv_equation()[:, 0], self.solv_equation()[:, 1], label="Path")
+        path.set_title("Path of the object")
+        path.legend()
+
+        velocity.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
+        velocity.set_title("Velocity as a function of time")
+        velocity.legend()
+
+        position.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
+        position.set_title("Position as a function of time")
+        position.legend()
 
         plt.show()
 
@@ -370,7 +390,7 @@ if __name__ == "__main__":
     looping_p0 = 90  # in degrees
 
     """Ravine parameters"""
-    ravine_length = 0.7  # in meters
+    ravine_length = 0.9  # in meters
     ravine_height = 0.1  # in meters
     ravine_drag_coefficient = 0.001  # coefficient of drag * surface
     ravine_lift_coefficient = 0.001  # coefficient of lift * surface
@@ -391,9 +411,19 @@ if __name__ == "__main__":
 
     looping.trace()
     looping.trace(p_in_degrees=True, v_in_ms=True)
-    print("Minimum velocity for looping: {} rad/s".format(looping.get_min_velocity()))
     print("Minimum velocity for looping: {} m/s".format(looping.get_min_velocity(v_in_ms=True)))
+    print("Velocity at the end of the looping: {} m/s".format(looping.get_v_after_looping(v_in_ms=True)))
+
+    # Find the height of the slope to have just the right velocity to pass the looping
+    while looping.get_min_velocity(v_in_ms=True) < v_at_slope_end:
+        slope_height -= 0.1
+        v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
+
+    print("Minimum height of the slope to pass looping: {} m".format(slope_height))
+
+    # solv_equation()[:, 0]
 
     # Create the ravine object
     ravine = Ravine(duration=study_duration, interval=study_interval, ravine_dim=(ravine_length, ravine_height), mass=car_mass, v0=(4.9, 0), p0=(0, 0), sc_x=ravine_drag_coefficient, sc_z=ravine_lift_coefficient)
     ravine.trace()
+
