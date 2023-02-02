@@ -18,6 +18,27 @@ class MechanicalStudy:
         self.v0 = v0
         self.p0 = p0
 
+    def annotate_point(self, t, color):
+        """
+        Annotate the point at time i with the acceleration, velocity and position
+        :param t: time in seconds
+        :param color: color of the annotation
+        """
+
+        closest_index = (np.abs(self.time - t)).argmin()
+        closest = [
+            (self.get_values_on_interval()[0][closest_index], 'a'),
+            (self.get_values_on_interval()[1][closest_index], 'v'),
+            (self.get_values_on_interval()[2][closest_index], 'p'),
+        ]
+
+        for closest_val, closest_label in closest:
+            plt.scatter(t, closest_val, color=color)
+            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -10), ha='center', color=color)
+            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -20), ha='center', color=color)
+
 
 class Slope(MechanicalStudy):
     def __init__(self, duration, interval, alpha, v0, p0, mu=0.0, is_alpha_degrees=False):
@@ -109,31 +130,10 @@ class Slope(MechanicalStudy):
 
         return self.v(self.get_t_at_p(height / np.sin(self.alpha)))
 
-    def annotate_point(self, t, color):
-        """
-        Annotate the point at time i with the acceleration, velocity and position
-        :param t: time in seconds
-        :param color: color of the annotation
-        """
-
-        closest_index = (np.abs(self.time - t)).argmin()
-        closest = [
-            (self.get_values_on_interval()[0][closest_index], 'a'),
-            (self.get_values_on_interval()[1][closest_index], 'v'),
-            (self.get_values_on_interval()[2][closest_index], 'p'),
-        ]
-
-        for closest_val, closest_label in closest:
-            plt.scatter(t, closest_val, color=color)
-            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -10), ha='center', color=color)
-            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -20), ha='center', color=color)
-
     def trace(self, *args):
-        """
-        Trace the acceleration, velocity and position
-        :param args: time(s) in seconds to annotate
+        """"
+        Trace the path of the object
+        :param args: Times to annotate
         """
 
         plt.plot(self.time, self.get_values_on_interval()[0], label="Acceleration (m/s^2)")
@@ -372,27 +372,6 @@ class Ravine(MechanicalStudy):
             [self.v_no_friction(t)[2] for t in self.time], \
             [self.p_no_friction(t)[2] for t in self.time]
 
-    def annotate_point(self, t, color):
-        """
-        Annotate the point at time i with the acceleration, velocity and position
-        :param t: time in seconds
-        :param color: color of the annotation
-        """
-
-        closest_index = (np.abs(self.time - t)).argmin()
-        closest = [
-            (self.get_values_on_interval()[0][closest_index], 'a'),
-            (self.get_values_on_interval()[1][closest_index], 'v'),
-            (self.get_values_on_interval()[2][closest_index], 'p'),
-        ]
-
-        for closest_val, closest_label in closest:
-            plt.scatter(t, closest_val, color=color)
-            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -10), ha='center', color=color)
-            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -20), ha='center', color=color)
-
     def build_equation(self, y, t):
         """
         Build the differential equation
@@ -420,30 +399,8 @@ class Ravine(MechanicalStudy):
 
     def trace(self, *args):
         """
-        Trace the acceleration, velocity and position
-        :param args: time(s) in seconds to annotate
-        """
-
-        plt.plot(self.time, self.get_values_on_interval()[0], label="Acceleration (m/s^2)")
-        plt.plot(self.time, self.get_values_on_interval()[1], label="Velocity (m/s)")
-        plt.plot(self.time, self.get_values_on_interval()[2], label="Position (m)")
-
-        for i in args:
-            color = "#" + ''.join([random.choice('0123456789ABCDEF') for i in range(6)])
-
-            if i > self.time[-1] or i < 0:
-                raise ValueError("t must be in [0 ; {}]".format(self.time[-1]))
-
-            plt.axvline(x=i, color=color)
-            self.annotate_point(i, color)
-
-        plt.title("Acceleration, velocity and position as a function of time")
-        plt.legend()
-        plt.show()
-
-    def trace(self, *args):
-        """
-        Trace the position and velocity
+        Trace the path of the object
+        :param args: Times to annotate
         """
 
         if self.sc_z > 0.0 or self.sc_x > 0.0:
@@ -505,7 +462,7 @@ if __name__ == "__main__":
     looping_p0 = 90  # in degrees
 
     """Ravine parameters"""
-    ravine_length = 0.9  # in meters
+    ravine_length = 0.7  # in meters
     ravine_height = 0.1  # in meters
     ravine_drag_coefficient = 0.001  # coefficient of drag * surface
     ravine_lift_coefficient = 0.001  # coefficient of lift * surface
