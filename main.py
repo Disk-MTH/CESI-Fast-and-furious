@@ -318,6 +318,81 @@ class Ravine(MechanicalStudy):
         self.sc_z = sc_z
         self.rho = rho
 
+    def a_no_friction(self):
+        """
+        Get the acceleration of the object
+        :return: the acceleration of the object in m/s^2
+        """
+
+        if self.sc_z > 0.0 or self.sc_x > 0.0:
+            raise ValueError("Coefficient of friction must be null for no friction simulation")
+
+        ax = 0
+        ay = - self.g
+
+        return ax, ay, np.sqrt(ax ** 2 + ay ** 2)
+
+    def v_no_friction(self, t):
+        """
+        Get the velocity of the object
+        :param t: time in seconds
+        :return: the velocity of the object in m/s
+        """
+
+        if self.sc_z > 0.0 or self.sc_x > 0.0:
+            raise ValueError("Coefficient of friction must be null for no friction simulation")
+
+        vx = self.v0[0]
+        vy = - self.g * t + self.v0[1]
+
+        return vx, vy, np.sqrt(vx ** 2 + vy ** 2)
+
+    def p_no_friction(self, t):
+        """
+        Get the position of the object
+        :param t: time in seconds
+        :return: the position of the object in m
+        """
+
+        if self.sc_z > 0.0 or self.sc_x > 0.0:
+            raise ValueError("Coefficient of friction must be null for no friction simulation")
+
+        px = self.v0[0] * t + self.p0[0]
+        py = - self.g / 2 * t ** 2 + self.v0[1] * t + self.p0[1]
+
+        return px, py, np.sqrt(px ** 2 + py ** 2)
+
+    def get_values_on_interval(self):
+        """
+        Return the values of the acceleration, velocity and position on the interval
+        :return: tuple of the acceleration, velocity and position
+        """
+
+        return [self.a_no_friction()[2] for t in self.time], \
+            [self.v_no_friction(t)[2] for t in self.time], \
+            [self.p_no_friction(t)[2] for t in self.time]
+
+    def annotate_point(self, t, color):
+        """
+        Annotate the point at time i with the acceleration, velocity and position
+        :param t: time in seconds
+        :param color: color of the annotation
+        """
+
+        closest_index = (np.abs(self.time - t)).argmin()
+        closest = [
+            (self.get_values_on_interval()[0][closest_index], 'a'),
+            (self.get_values_on_interval()[1][closest_index], 'v'),
+            (self.get_values_on_interval()[2][closest_index], 'p'),
+        ]
+
+        for closest_val, closest_label in closest:
+            plt.scatter(t, closest_val, color=color)
+            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -10), ha='center', color=color)
+            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -20), ha='center', color=color)
+
     def build_equation(self, y, t):
         """
         Build the differential equation
@@ -343,28 +418,68 @@ class Ravine(MechanicalStudy):
 
         return odeint(self.build_equation, (self.p0[0], self.p0[1], self.v0[0], self.v0[1]), self.time)
 
-    def trace(self):
+    def trace(self, *args):
+        """
+        Trace the acceleration, velocity and position
+        :param args: time(s) in seconds to annotate
+        """
+
+        plt.plot(self.time, self.get_values_on_interval()[0], label="Acceleration (m/s^2)")
+        plt.plot(self.time, self.get_values_on_interval()[1], label="Velocity (m/s)")
+        plt.plot(self.time, self.get_values_on_interval()[2], label="Position (m)")
+
+        for i in args:
+            color = "#" + ''.join([random.choice('0123456789ABCDEF') for i in range(6)])
+
+            if i > self.time[-1] or i < 0:
+                raise ValueError("t must be in [0 ; {}]".format(self.time[-1]))
+
+            plt.axvline(x=i, color=color)
+            self.annotate_point(i, color)
+
+        plt.title("Acceleration, velocity and position as a function of time")
+        plt.legend()
+        plt.show()
+
+    def trace(self, *args):
         """
         Trace the position and velocity
         """
 
-        path = plt.subplot2grid((2, 2), (0, 0), colspan=2)
-        velocity = plt.subplot2grid((2, 2), (1, 0))
-        position = plt.subplot2grid((2, 2), (1, 1))
+        if self.sc_z > 0.0 or self.sc_x > 0.0:
+            path = plt.subplot2grid((2, 2), (0, 0), colspan=2)
+            velocity = plt.subplot2grid((2, 2), (1, 0))
+            position = plt.subplot2grid((2, 2), (1, 1))
 
-        plt.subplots_adjust(wspace=0.5, hspace=0.5)
+            plt.subplots_adjust(wspace=0.5, hspace=0.5)
 
-        path.plot(self.solv_equation()[:, 0], self.solv_equation()[:, 1], label="Path")
-        path.set_title("Path of the object")
-        path.legend()
+            path.plot(self.solv_equation()[:, 0], self.solv_equation()[:, 1], label="Path")
+            path.set_title("Path of the object")
+            path.legend()
 
-        velocity.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
-        velocity.set_title("Velocity as a function of time")
-        velocity.legend()
+            velocity.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
+            velocity.set_title("Velocity as a function of time")
+            velocity.legend()
 
-        position.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
-        position.set_title("Position as a function of time")
-        position.legend()
+            position.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
+            position.set_title("Position as a function of time")
+            position.legend()
+        else:
+            plt.plot(self.time, self.get_values_on_interval()[0], label="Acceleration (m/s^2)")
+            plt.plot(self.time, self.get_values_on_interval()[1], label="Velocity (m/s)")
+            plt.plot(self.time, self.get_values_on_interval()[2], label="Position (m)")
+
+            for i in args:
+                color = "#" + ''.join([random.choice('0123456789ABCDEF') for i in range(6)])
+
+                if i > self.time[-1] or i < 0:
+                    raise ValueError("t must be in [0 ; {}]".format(self.time[-1]))
+
+                plt.axvline(x=i, color=color)
+                self.annotate_point(i, color)
+
+            plt.title("Acceleration, velocity and position as a function of time")
+            plt.legend()
 
         plt.show()
 
