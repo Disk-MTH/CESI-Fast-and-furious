@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 import numpy as np
 import random
-import math
+
 
 class MechanicalStudy:
     g = 9.81
@@ -421,9 +421,9 @@ if __name__ == "__main__":
 
     print("Minimum height of the slope to pass looping: {} m".format(slope_height))
 
-    # solv_equation()[:, 0]
-
     # Create the ravine object
-    ravine = Ravine(duration=study_duration, interval=study_interval, ravine_dim=(ravine_length, ravine_height), mass=car_mass, v0=(4.9, 0), p0=(0, 0), sc_x=ravine_drag_coefficient, sc_z=ravine_lift_coefficient)
+    ravine = Ravine(duration=study_duration, interval=study_interval, ravine_dim=(ravine_length, ravine_height),
+                    mass=car_mass, v0=(looping.get_v_after_looping(v_in_ms=True), 0), p0=(0, 0),
+                    sc_x=ravine_drag_coefficient, sc_z=ravine_lift_coefficient)
     ravine.trace()
 
