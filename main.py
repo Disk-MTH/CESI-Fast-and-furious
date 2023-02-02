@@ -267,9 +267,9 @@ class Looping(MechanicalStudy):
         row_1.legend()
 
         if v_in_ms:
-            row_2.plot(self.time, self.solv_equation()[:, 1] * self.radius, label="angular velocity (m/s)")
+            row_2.plot(self.time, self.solv_equation()[:, 1] * self.radius, label="Angular velocity (m/s)")
         else:
-            row_2.plot(self.time, self.solv_equation()[:, 1], label="angular velocity (rad/s)")
+            row_2.plot(self.time, self.solv_equation()[:, 1], label="Angular velocity (rad/s)")
         row_2.set_title("Angular as a function of time")
         row_2.legend()
 
@@ -277,15 +277,86 @@ class Looping(MechanicalStudy):
 
 
 class Ravine(MechanicalStudy):
-    def __init__(self, duration, interval, v0, p0):
+    def __init__(self, duration, interval, ravine_dim, mass, v0, p0, sc_x=0.0, sc_z=0.0, rho=1.225):
+        """
+        Ravine simulation class constructor
+        :param duration: duration of the simulation in seconds
+        :param interval: interval between two points in seconds
+        :param ravine_dim: dimensions of the ravine in meters (width, height)
+        :param mass: mass of the object in kilograms
+        :param v0: initial velocity in m/s
+        :param p0: initial position in meters
+        :param sc_x: coefficient of friction for drag (surface * coefficient of drag)
+        :param sc_z: coefficient of friction for lift (surface * coefficient of lift)
+        :param rho: density of the air in kg/m^3
+        """
+
         super().__init__(duration, interval, v0, p0)
+
+        if ravine_dim[0] <= 0.0 or ravine_dim[1] <= 0.0:
+            raise ValueError("Ravine dimensions must be positive")
+
+        if sc_x < 0.0 or sc_z < 0.0:
+            raise ValueError("Coefficient of friction must be positive or null")
+
+        self.ravine_dim = ravine_dim
+        self.mass = mass
+        self.sc_x = sc_x
+        self.sc_z = sc_z
+        self.rho = rho
+
+    def build_equation(self, y, t):
+        """
+        Build the differential equation
+        :param y: The current state of the system
+        :param t: The timeline
+        :return: The system to solve
+        """
+
+        x, y, vx, vy = y
+        v = np.sqrt(vx ** 2 + vy ** 2)
+
+        return [
+            vx, vy,
+            (- self.rho / 2 * self.sc_x * vx * v - self.rho / 2 * self.sc_z * vy * v) / self.mass,
+            (- self.rho / 2 * self.sc_x * vy * v + self.rho / 2 * self.sc_z * vx * v) / self.mass - self.g
+        ]
+
+    def solv_equation(self):
+        """
+        Solve the differential equation
+        :return: The solution of the differential equation
+        """
+
+        return odeint(self.build_equation, (self.p0[0], self.p0[1], self.v0[0], self.v0[1]), self.time)
+
+    def trace(self):
+        """
+        Trace the position and velocity
+        """
+
+        fig, (row_1, row_2) = plt.subplots(2, 1)
+        fig.subplots_adjust(hspace=0.5)
+
+        row_1.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
+        row_1.set_title("Velocity as a function of time")
+        row_1.legend()
+
+        row_2.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
+        row_2.set_title("Position as a function of time")
+        row_2.legend()
+
+        plt.show()
 
 
 if __name__ == "__main__":
+    """Generic parameters"""
     study_duration = 1.5  # in seconds
     study_interval = 0.01  # in seconds
+    car_mass = 0.03  # in kg
     friction_coefficient = 0.002  # coefficient of friction with the ground
 
+    """Slope parameters"""
     slope_height = 0.93  # in meters
     slope_angle = 40  # in degrees
     slope_v0 = (0, 0)  # v0x, v0y in m/s
@@ -294,9 +365,17 @@ if __name__ == "__main__":
     slope_ceil = 5  # in meters
     slope_height_interval = 0.01  # in meters
 
+    """Looping parameters"""
     looping_radius = 0.115  # in meters
     looping_p0 = 90  # in degrees
 
+    """Ravine parameters"""
+    ravine_length = 0.7  # in meters
+    ravine_height = 0.1  # in meters
+    ravine_drag_coefficient = 0.001  # coefficient of drag * surface
+    ravine_lift_coefficient = 0.001  # coefficient of lift * surface
+
+    # Create the slope object
     slope = Slope(duration=study_duration, interval=study_interval, alpha=slope_angle, v0=slope_v0, p0=slope_p0,
                   mu=friction_coefficient, is_alpha_degrees=True)
 
@@ -306,6 +385,7 @@ if __name__ == "__main__":
     v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
     print("Velocity at the end of the slope: {} m/s".format(v_at_slope_end))
 
+    # Create the looping object
     looping = Looping(duration=study_duration, interval=study_interval, radius=looping_radius, v0=v_at_slope_end,
                       p0=looping_p0, mu=friction_coefficient, is_v0_ms=True, is_p0_degrees=True)
 
@@ -314,4 +394,6 @@ if __name__ == "__main__":
     print("Minimum velocity for looping: {} rad/s".format(looping.get_min_velocity()))
     print("Minimum velocity for looping: {} m/s".format(looping.get_min_velocity(v_in_ms=True)))
 
-
+    # Create the ravine object
+    ravine = Ravine(duration=study_duration, interval=study_interval, ravine_dim=(ravine_length, ravine_height), mass=car_mass, v0=(4.9, 0), p0=(0, 0), sc_x=ravine_drag_coefficient, sc_z=ravine_lift_coefficient)
+    ravine.trace()
