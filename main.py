@@ -180,18 +180,17 @@ class Slope(MechanicalStudy):
 
 
 class Looping(MechanicalStudy):
-    def __init__(self, duration, interval, radius, mass, theta_0, v0, p0, mu=0.0, is_theta_degrees=False):
+    def __init__(self, duration, interval, radius, v0, p0, mu=0.0, is_v0_ms=False, is_p0_degrees=False):
         """
         Looping simulation class constructor
         :param duration: duration of the simulation in seconds
         :param interval: interval between two points in seconds
         :param radius: radius of the loop in meters
-        :param mass: mass of the car in kilograms
-        :param theta_0: tuple of initial angle and initial angular velocity
-        :param v0: tuple of the initial velocity (vx, vy)
-        :param p0: tuple of the initial position (px, py)
+        :param v0: initial velocity in rad/s
+        :param p0: initial angle in radians
         :param mu: coefficient of friction (0.0 for no friction)
-        :param is_theta_degrees: True if theta_0 is in degrees, False if theta_0 is in radians
+        :param is_v0_ms: True if v0 is in m/s, False if v0 is in rad/s
+        :param is_p0_degrees: True if p0 is in degrees, False if p0 is in radians
         """
 
         super().__init__(duration, interval, v0, p0)
@@ -199,43 +198,44 @@ class Looping(MechanicalStudy):
         if radius <= 0.0:
             raise ValueError("radius must be positive")
 
-        if mass <= 0.0:
-            raise ValueError("mass must be positive")
+        if is_v0_ms:
+            self.v0 = self.v0 / radius
 
-        if is_theta_degrees:
-            theta_0 = np.radians(theta_0[0]), np.radians(theta_0[1])
+        if is_p0_degrees:
+            self.p0 = np.radians(self.p0)
 
         if mu < 0.0 or mu >= 1.0:
             raise ValueError("mu must be in [0.0 ; 1[")
 
-        self.mass = mass
         self.radius = radius
-        self.theta_0 = theta_0
+        self.theta_0 = (self.p0, self.v0)
         self.mu = mu
 
     def build_equation(self, y, t):
-        f, f_p = y
+        f, fp = y
 
         return [
-            f_p,
-            -self.g * np.sin(f) - self.mu * (-self.radius * f_p ** 2 * self.mass + self.g * np.cos(f) / self.mass) / self.radius
+            fp,
+            - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (self.g * np.cos(f) * self.mu / self.radius)
         ]
 
     def solv_equation(self):
-        return odeint(self.build_equation, self.theta_0, self.time)[:, 0]
+        return odeint(self.build_equation, self.theta_0, self.time)
 
     def trace(self):
-        plt.plot(self.time, self.solv_equation())
+        plt.plot(self.time, self.solv_equation()[:, 0], label="theta : angular position")
+        plt.plot(self.time, self.solv_equation()[:, 1], label="theta_p : angular velocity")
+        plt.legend()
         plt.show()
 
 
 if __name__ == "__main__":
     slope = Slope(1, 0.01, 40, (0, 0), (0, 0), mu=0.002, is_alpha_degrees=True)
 
-    #duration, interval, radius, mass, theta_0, v0, p0, mu=0.0, is_theta_degrees=False
-
-    looping = Looping(5, 0.01, 0.115, 0.03, (0, 0), (0, 0), (0, 0), mu=0.002, is_theta_degrees=True)
+    looping = Looping(10, 0.01, 0.115, 37, np.pi / 2, mu=0.02)
 
     looping.trace()
+
+
 
 

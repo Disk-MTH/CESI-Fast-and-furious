@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 ## Déclaration des constantes
 
 g = 9.81
-L = 1
-theta0_deg = 10   # angle initial en degrés
+L = 0.115
+theta0_deg = 270   # angle initial en degrés
 theta0 = theta0_deg*np.pi/180   # angle initial en radians
-vAV_init = [theta0,0]    # conditions initiales : angle initial = theta0, vitesse angulaire initiale = 0
+vAV_init = [theta0, 4.24/L]    # conditions initiales : angle initial = theta0, vitesse angulaire initiale = 0
 
 t0 = 0
 tfinal = 10
@@ -35,8 +35,8 @@ plt.plot(t, sol1[:, 0]*180/np.pi, color = "red")
 plt.title("Position angulaire du pendule (E1)")
 plt.xlabel("Temps (s)")
 plt.ylabel("Position en degrés")
-
+plt.show()
 plt.plot(t, sol2[:, 0]*180/np.pi, color = "green")
 plt.title("Position angulaire du pendule (E2)")
 plt.xlabel("Temps (s)")
-plt.show()
+

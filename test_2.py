@@ -2,24 +2,24 @@ import numpy as np
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 
-R = 0.115
+radius = 0.115
 g = 9.81
-m = 0.03
+mu = 0.03
+theta0 = [np.pi / 2, 37]
+
+def equation_diff(y, t):
+    f, fp = y
+    fpp = - (g * np.sin(f) / radius) - (mu * fp ** 2) - (g * np.cos(f) * mu / radius)
+
+    return [fp, fpp]
 
 
-def equation_diff(y, t, R, g, m, c):
-    f, f_der = y
-    f_double_der = -g * np.sin(f) - c * (-R * f_der ** 2 * m + g * np.cos(f) / m) / R
-    return [f_der, f_double_der]
+t = np.arange(0, 2, 0.01)
+sol = odeint(equation_diff, theta0, t)
+theta = sol[:, 0]
+theta_p = sol[:, 1]
 
-
-y0 = [0, 0]
-t = np.arange(0, 1, 0.01)
-c = 0.1
-sol = odeint(equation_diff, y0, t, args=(R, g, m, c))
-f = sol[:, 0]
-f_der = sol[:, 1]
-
-plt.plot(t, f)
-plt.plot(t, f_der)
+plt.plot(t, theta, label="theta : angular position")
+plt.plot(t, theta_p, label="theta_p : angular velocity")
+plt.legend()
 plt.show()
