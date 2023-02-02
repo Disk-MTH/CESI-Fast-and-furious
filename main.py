@@ -20,7 +20,7 @@ class MechanicalStudy:
 
 
 class Slope(MechanicalStudy):
-    def __init__(self, duration, interval, v0, p0, alpha, mu=0.0, is_alpha_degrees=False):
+    def __init__(self, duration, interval, alpha, v0, p0, mu=0.0, is_alpha_degrees=False):
         """
         Slope simulation class constructor
         :param duration: duration of the simulation in seconds
@@ -61,11 +61,7 @@ class Slope(MechanicalStudy):
         :return: tuple of the velocity (vx, vy, v)
         """
 
-        if self.mu == 0.0:
-            vx = self.g * np.sin(self.alpha) * t + self.v0[0]
-        else:
-            vx = self.g * np.sin(self.alpha) * (1 - self.mu) * t + self.v0[0]
-
+        vx = self.g * np.sin(self.alpha) * (1 - self.mu) * t + self.v0[0]
         vy = self.v0[1]
 
         return vx, vy, np.sqrt(vx ** 2 + vy ** 2)
@@ -77,11 +73,7 @@ class Slope(MechanicalStudy):
         :return: tuple of the position (px, py, p)
         """
 
-        if self.mu == 0.0:
-            px = self.g * np.sin(self.alpha) * t**2 / 2 + self.v0[0] * t + self.p0[0]
-        else:
-            px = self.g * np.sin(self.alpha) * (1 - self.mu) * t**2 / 2 + self.v0[0] * t + self.p0[0]
-
+        px = self.g * np.sin(self.alpha) * (1 - self.mu) * t ** 2 / 2 + self.v0[0] * t + self.p0[0]
         py = self.v0[1] * t + self.p0[1]
 
         return px, py, np.sqrt(px ** 2 + py ** 2)
@@ -103,10 +95,7 @@ class Slope(MechanicalStudy):
         :return: time in seconds
         """
 
-        if self.mu == 0.0:
-            return np.sqrt(2 * p / (self.g * np.sin(self.alpha)))
-        else:
-            return np.sqrt(2 * p / (self.g * np.sin(self.alpha) * (1 - self.mu)))
+        return np.sqrt(2 * p / (self.g * np.sin(self.alpha) * (1 - self.mu)))
 
     def get_v_end_terms_of_height(self, height):
         """
@@ -160,6 +149,7 @@ class Slope(MechanicalStudy):
             plt.axvline(x=i, color=color)
             self.annotate_point(i, color)
 
+        plt.title("Acceleration, velocity and position as a function of time")
         plt.legend()
         plt.show()
 
@@ -175,6 +165,7 @@ class Slope(MechanicalStudy):
 
         height = np.arange(0, ceil + interval, interval)
         plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Velocity (m/s)")
+        plt.title("Velocity as a function of the height")
         plt.legend()
         plt.show()
 
@@ -208,10 +199,16 @@ class Looping(MechanicalStudy):
             raise ValueError("mu must be in [0.0 ; 1[")
 
         self.radius = radius
-        self.theta_0 = (self.p0, self.v0)
         self.mu = mu
 
     def build_equation(self, y, t):
+        """
+        Build the differential equation
+        :param y: The current state of the system
+        :param t: The timeline
+        :return: The system to solve
+        """
+
         f, fp = y
 
         return [
@@ -220,22 +217,101 @@ class Looping(MechanicalStudy):
         ]
 
     def solv_equation(self):
-        return odeint(self.build_equation, self.theta_0, self.time)
+        """
+        Solve the differential equation
+        :return: The solution of the differential equation
+        """
 
-    def trace(self):
-        plt.plot(self.time, self.solv_equation()[:, 0], label="theta : angular position")
-        plt.plot(self.time, self.solv_equation()[:, 1], label="theta_p : angular velocity")
-        plt.legend()
+        return odeint(self.build_equation, (self.p0, self.v0), self.time)
+
+    def get_min_velocity(self, precision=0.001, v_in_ms=False):
+        """
+        Get the minimum velocity to pass looping with dichotomy
+        :param precision: precision of the result
+        :param v_in_ms: True if the result must be in m/s, False if the result must be in rad/s
+        :return: the minimum velocity to pass the looping
+        """
+
+        original = (self.v0, self.p0)
+        low = 0
+        high = self.v0
+        while (high - low) > precision:
+            mid = (low + high) / 2
+            self.v0 = mid
+            result = self.solv_equation()
+            if np.sin(result[-1][0]) < 0:
+                high = mid
+            else:
+                low = mid
+
+        self.v0, self.p0 = original
+        return low if not v_in_ms else low * self.radius
+
+    def trace(self, p_in_degrees=False, v_in_ms=False):
+        """
+        Trace the angular position and angular velocity
+        :param p_in_degrees: True if the angular position must be in
+            degrees, False if the angular position must be in radians
+        :param v_in_ms: True if the angular velocity must
+            be in m/s, False if the angular velocity must be in rad/s
+        """
+
+        fig, (row_1, row_2) = plt.subplots(2, 1)
+        fig.subplots_adjust(hspace=0.5)
+
+        if p_in_degrees:
+            row_1.plot(self.time, np.degrees(self.solv_equation()[:, 0]), label="Angular position (deg)")
+        else:
+            row_1.plot(self.time, self.solv_equation()[:, 0], label="Angular position (rad)")
+        row_1.set_title("Angular position as a function of time")
+        row_1.legend()
+
+        if v_in_ms:
+            row_2.plot(self.time, self.solv_equation()[:, 1] * self.radius, label="angular velocity (m/s)")
+        else:
+            row_2.plot(self.time, self.solv_equation()[:, 1], label="angular velocity (rad/s)")
+        row_2.set_title("Angular as a function of time")
+        row_2.legend()
+
         plt.show()
 
 
-if __name__ == "__main__":
-    slope = Slope(1, 0.01, 40, (0, 0), (0, 0), mu=0.002, is_alpha_degrees=True)
+class Ravine(MechanicalStudy):
+    def __init__(self, duration, interval, v0, p0):
+        super().__init__(duration, interval, v0, p0)
 
-    looping = Looping(10, 0.01, 0.115, 37, np.pi / 2, mu=0.02)
+
+if __name__ == "__main__":
+    study_duration = 1.5  # in seconds
+    study_interval = 0.01  # in seconds
+    friction_coefficient = 0.002  # coefficient of friction with the ground
+
+    slope_height = 0.93  # in meters
+    slope_angle = 40  # in degrees
+    slope_v0 = (0, 0)  # v0x, v0y in m/s
+    slope_p0 = (0, 0)  # p0x, p0y in m
+
+    slope_ceil = 5  # in meters
+    slope_height_interval = 0.01  # in meters
+
+    looping_radius = 0.115  # in meters
+    looping_p0 = 90  # in degrees
+
+    slope = Slope(duration=study_duration, interval=study_interval, alpha=slope_angle, v0=slope_v0, p0=slope_p0,
+                  mu=friction_coefficient, is_alpha_degrees=True)
+
+    slope.trace(slope.get_t_at_p(slope_height / np.sin(np.radians(slope_angle))))
+    slope.trace_v_end_terms_of_height(ceil=slope_ceil, interval=slope_height_interval)
+
+    v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
+    print("Velocity at the end of the slope: {} m/s".format(v_at_slope_end))
+
+    looping = Looping(duration=study_duration, interval=study_interval, radius=looping_radius, v0=v_at_slope_end,
+                      p0=looping_p0, mu=friction_coefficient, is_v0_ms=True, is_p0_degrees=True)
 
     looping.trace()
-
-
+    looping.trace(p_in_degrees=True, v_in_ms=True)
+    print("Minimum velocity for looping: {} rad/s".format(looping.get_min_velocity()))
+    print("Minimum velocity for looping: {} m/s".format(looping.get_min_velocity(v_in_ms=True)))
 
 
