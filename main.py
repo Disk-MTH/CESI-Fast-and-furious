@@ -14,37 +14,44 @@ def load_data_to_db(db, folder_path):
     counter = 1
     for folders, sub_folders, files in os.walk(folder_path):    # walk through all the files in the folder
         for file in files:  # for each file
-            if ".Trk" in file.title() and counter:  # if the file is a tracking file
+            if ".Trk" in file.title():  # if the file is a tracking file
                 cursor.execute(
                     "CREATE TABLE tracking_" +
                     str(counter) +
-                    " (time double NOT NULL, x_pos double NOT NULL, y_pos double NOT NULL);"
+                    "(time double NOT NULL, px double NOT NULL, py double NOT NULL, "
+                    "vx double  NOT NULL, vy double NOT NULL);"
                 )  # create a table for the tracking file
 
                 xml_tree_root = XmlParser.parse(os.path.join(folders, file)).getroot()  # load file in parser
 
-                t, x, y = [0], [], []  # create lists for time, x and y positions
+                t, px, py, vx, vy = [0], [], [], [0], [0]  # create lists for time, x and y positions
 
                 for x_pos in xml_tree_root.findall(".//property[@name='x']"):  # get all the x positions
-                    x.append(float(x_pos.text))
+                    px.append(float(x_pos.text))
 
                 for y_pos in xml_tree_root.findall(".//property[@name='y']"):  # get all the y positions
-                    y.append(float(y_pos.text))
+                    py.append(float(y_pos.text))
 
-                for i in range(len(x)):  # create the time list
+                for i in range(len(px)):  # create the time list
                     t.append(t[i] + float(xml_tree_root.find(".//property[@name='delta_t']").text) / 1000)
 
-                x_max = max(x)  # get the max x position
-                for i in range(len(x)):  # for each x position
-                    x[i] = x_max - x[i]  # invert the x position
+                for i in range(1, len(px) - 1):  # create the x velocity list
+                    vx.append((px[i] - px[i - 1]) / (t[i] - t[i - 1]))
 
-                y_max = max(y)  # get the max y position
-                for i in range(len(y)):  # for each y position
-                    y[i] = y_max - y[i]  # invert the y position
+                for i in range(1, len(py) - 1):  # create the y velocity list
+                    vy.append((py[i] - py[i - 1]) / (t[i] - t[i - 1]))
 
-                cursor.execute(("INSERT INTO tracking_" + str(counter) + " (time, x_pos, y_pos) VALUES " +
-                                str([(ti, xi, yi) for ti, xi, yi in zip(t, x, y)]) + ";")
-                               .replace("[", "").replace("]", "")
+                x_max = max(px)  # get the max x position
+                for i in range(len(px)):  # for each x position
+                    px[i] = x_max - px[i]  # invert the x position
+
+                y_max = max(py)  # get the max y position
+                for i in range(len(py)):  # for each y position
+                    py[i] = y_max - py[i]  # invert the y position
+
+                cursor.execute(("INSERT INTO tracking_" + str(counter) + " (time, px, py, vx, vy) VALUES " +
+                                str([(ti, pxi, pyi, vxi, vyi) for ti, pxi, pyi, vxi, vyi in zip(t, px, py, vx, vy)])
+                                + ";").replace("[", "").replace("]", "")
                                )  # insert the data into the table
 
                 counter += 1
@@ -56,28 +63,42 @@ def plot_tracking(db, index):
     cursor.execute("USE meca_project_tracking;")  # select the database
     cursor.execute("SELECT * FROM tracking_" + str(index) + ";")  # select the data from the table
 
-    t, x, y = zip(*cursor.fetchall())
+    t, px, py, vx, vy = zip(*cursor.fetchall())  # unpack the data
 
-    path = plt.subplot2grid((2, 2), (0, 0), colspan=2)
-    x_pos = plt.subplot2grid((2, 2), (1, 0))
-    y_pos = plt.subplot2grid((2, 2), (1, 1))
+    # Plot the path of the object
+
+    plt.plot(px, py)
+    plt.title("Path of the object (mm)")
+    plt.show()
+
+    # Plot the x and y positions as a function of time
+
+    px_plot = plt.subplot2grid((2, 1), (0, 0))
+    py_plot = plt.subplot2grid((2, 1), (1, 0))
+
+    px_plot.plot(t, px, label="X position (mm)")
+    px_plot.set_title("Tracking " + str(index) + " position in terms of time")
+    px_plot.legend()
+
+    py_plot.plot(t, py, label="Y position (mm)")
+    py_plot.legend()
 
     plt.subplots_adjust(wspace=0.5, hspace=0.5)
+    plt.show()
 
-    path.plot(x, y, label="Path (mm)")
-    path.set_title("Path of the object")
-    path.legend()
+    # Plot the x and y velocities as a function of time
 
-    x_pos.plot(t, x, label="X position (mm/s)")
-    x_pos.set_title("X position as a function of time")
-    x_pos.legend()
+    vx_plot = plt.subplot2grid((2, 1), (0, 0))
+    vy_plot = plt.subplot2grid((2, 1), (1, 0))
 
-    y_pos.plot(t, y, label="Y position (mm/s)")
-    y_pos.set_title("Y position as a function of time")
-    y_pos.legend()
+    vx_plot.plot(t, vx, label="X velocity (mm/s)")
+    vx_plot.set_title("Tracking " + str(index) + " velocity in terms of time")
+    vx_plot.legend()
 
-    plt.title("Tracking " + str(index))
-    plt.legend()
+    vy_plot.plot(t, vy, label="Y velocity (mm/s)")
+    vy_plot.legend()
+
+    plt.subplots_adjust(wspace=0.5, hspace=0.5)
     plt.show()
 
 
