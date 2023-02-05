@@ -1,23 +1,17 @@
 import os
+import numpy as np
 import mysql.connector
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as XmlParser
 
-import numpy as np
 
-
-def load_data_to_db(db, folder_path):
-    cursor = db.cursor()  # create a cursor to execute queries
-
-    cursor.execute("DROP DATABASE IF EXISTS meca_project_tracking;")  # drop the database if it exists
-    cursor.execute("CREATE DATABASE meca_project_tracking;")  # create the database
-    cursor.execute("USE meca_project_tracking;")  # select the database
-
+def load_data_to_db(db_cursor, folder_path):
+    db_cursor.fetchall()  # clear the cursor
     counter = 1
-    for folders, sub_folders, files in os.walk(folder_path):    # walk through all the files in the folder
+    for folders, sub_folders, files in os.walk(folder_path):  # walk through all the files in the folder
         for file in files:  # for each file
             if ".Trk" in file.title():  # if the file is a tracking file
-                cursor.execute(
+                db_cursor.execute(
                     "CREATE TABLE tracking_" +
                     str(counter) +
                     "(time double NOT NULL, px double NOT NULL, py double NOT NULL, "
@@ -51,25 +45,22 @@ def load_data_to_db(db, folder_path):
                 for i in range(len(py)):  # for each y position
                     py[i] = y_max - py[i]  # invert the y position
 
-                cursor.execute(("INSERT INTO tracking_" + str(counter) + " (time, px, py, vx, vy) VALUES " +
-                                str([(ti, pxi, pyi, vxi, vyi) for ti, pxi, pyi, vxi, vyi in zip(t, px, py, vx, vy)])
-                                + ";").replace("[", "").replace("]", "")
-                               )  # insert the data into the table
+                db_cursor.execute(("INSERT INTO tracking_" + str(counter) + " (time, px, py, vx, vy) VALUES " +
+                                   str([(ti, pxi, pyi, vxi, vyi) for ti, pxi, pyi, vxi, vyi in zip(t, px, py, vx, vy)])
+                                   + ";").replace("[", "").replace("]", "")
+                                  )  # insert the data into the table
 
                 counter += 1
 
 
-def load_data_from_db(db, tracking_index):
-    cursor = db.cursor()  # create a cursor to execute queries
-
-    cursor.execute("USE meca_project_tracking;")  # select the database
-    cursor.execute("SELECT * FROM tracking_" + str(tracking_index) + ";")  # select the data from the table
-
-    return zip(*cursor.fetchall())  # unpack the data
+def load_data_from_db(db_cursor, tracking_index):
+    db_cursor.fetchall()  # clear the cursor
+    db_cursor.execute("SELECT * FROM tracking_" + str(tracking_index) + ";")  # select the data from the table
+    return zip(*db_cursor.fetchall())  # unpack the data
 
 
-def plot_tracking(db, index):
-    t, px, py, vx, vy = load_data_from_db(db, index)  # load the data from the database
+def plot_tracking(db_cursor, index):
+    t, px, py, vx, vy = load_data_from_db(db_cursor, index)  # load the data from the database
 
     # Plot the path of the object
 
@@ -108,9 +99,9 @@ def plot_tracking(db, index):
     plt.show()
 
 
-def get_outstanding_values(db, index):
-    t, px, py, vx, vy = load_data_from_db(db, index)  # load the data from the database
-    
+def get_outstanding_values_per_tracking(db_cursor, index):
+    t, px, py, vx, vy = load_data_from_db(db_cursor, index)  # load the data from the database
+
     vy_at_looping_top = min(vy)  # get the minimum y velocity
     vx_at_looping_top = vx[vy.index(vy_at_looping_top)]  # get the x velocity at the minimum y velocity
     v_at_looping_top = np.sqrt(vx_at_looping_top ** 2 + vy_at_looping_top ** 2)
@@ -125,35 +116,52 @@ def get_outstanding_values(db, index):
     vx_at_looping_end = vx[vy.index(vy_at_looping_end)]  # get the x velocity at the maximum y velocity
     v_at_looping_end = np.sqrt(vx_at_looping_end ** 2 + vy_at_looping_end ** 2)
 
-    return v_at_looping_top, v_at_slope_end, v_at_looping_end
+    return v_at_slope_end, v_at_looping_top, v_at_looping_end
+
+
+def get_outstanding_values(db_cursor):
+    db_cursor.fetchall()  # clear the cursor
+    db_cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+                   f"WHERE TABLE_SCHEMA = '{schema_name}';")  # query the number of tables
+    tracking_count = db_cursor.fetchall()[0][0]  # get the number of tables
+
+    # get the outstanding values for each tracking
+    slope_end_velocities, \
+        looping_top_velocities, \
+        looping_end_velocities = zip(*[get_outstanding_values_per_tracking(db_cursor, i) for i in range(1, tracking_count + 1)])
+
+    # calculate the average and uncertainty of the outstanding values
+    slope_end_velocity_average = np.average(slope_end_velocities)
+    slope_end_velocity_uncertainty = np.std(slope_end_velocities) / np.sqrt(len(slope_end_velocities))
+
+    looping_top_velocity_average = np.average(looping_top_velocities)
+    looping_top_velocity_uncertainty = np.std(looping_top_velocities) / np.sqrt(len(looping_top_velocities))
+
+    looping_end_velocity_average = np.average(looping_end_velocities)
+    looping_end_velocity_uncertainty = np.std(looping_end_velocities) / np.sqrt(len(looping_end_velocities))
+
+    return (slope_end_velocity_average, slope_end_velocity_uncertainty), \
+        (looping_top_velocity_average, looping_top_velocity_uncertainty), \
+        (looping_end_velocity_average, looping_end_velocity_uncertainty)
 
 
 if __name__ == "__main__":
+    schema_name = "meca_project_tracking"
+
     database = mysql.connector.connect(
         host="localhost",
         user="root",
         password="root"
+
     )
 
-    load_data_to_db(database, os.getcwd() + "/tracking")
-    #plot_tracking(database, 1)
+    cursor = database.cursor()
+    cursor.execute("DROP DATABASE IF EXISTS meca_project_tracking;")  # drop the database if it exists
+    cursor.execute("CREATE DATABASE meca_project_tracking;")  # create the database
+    cursor.execute(f"USE {schema_name};")  # select the database
 
-    for i in range(1, 21):
-        print(i)
+    load_data_to_db(cursor, os.getcwd() + "/tracking")  # load the data to the database
 
-    """t, px, py, vx, vy = load_data_from_db(database, 1)  # load the data from the database
 
-    v_at_looping_top = min(vy)  # get the minimum y velocity
-    t_at_looping_top = t[vy.index(v_at_looping_top)]  # get the time at the minimum y velocity
-
-    v_at_slope_end = max(vy[:t.index(t_at_looping_top)])  # get the maximum y velocity
-    t_at_slope_end = t[vy.index(v_at_slope_end)]  # get the time at the maximum y velocity
-
-    v_at_looping_end = max(vy[t.index(t_at_looping_top):])  # get the maximum y velocity
-    t_at_looping_end = t[vy.index(v_at_looping_end)]  # get the time at the maximum y velocity
-
-    print("Looping top velocity: " + str(v_at_looping_top) + " mm/s at " + str(t_at_looping_top) + " s")
-    print("Slope end velocity: " + str(v_at_slope_end) + " mm/s at " + str(t_at_slope_end) + " s")
-    print("Looping end velocity: " + str(v_at_looping_end) + " mm/s at " + str(t_at_looping_end) + " s")"""
 
     database.close()
