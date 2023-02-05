@@ -3,6 +3,8 @@ import mysql.connector
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as XmlParser
 
+import numpy as np
+
 
 def load_data_to_db(db, folder_path):
     cursor = db.cursor()  # create a cursor to execute queries
@@ -57,13 +59,17 @@ def load_data_to_db(db, folder_path):
                 counter += 1
 
 
-def plot_tracking(db, index):
+def load_data_from_db(db, tracking_index):
     cursor = db.cursor()  # create a cursor to execute queries
 
     cursor.execute("USE meca_project_tracking;")  # select the database
-    cursor.execute("SELECT * FROM tracking_" + str(index) + ";")  # select the data from the table
+    cursor.execute("SELECT * FROM tracking_" + str(tracking_index) + ";")  # select the data from the table
 
-    t, px, py, vx, vy = zip(*cursor.fetchall())  # unpack the data
+    return zip(*cursor.fetchall())  # unpack the data
+
+
+def plot_tracking(db, index):
+    t, px, py, vx, vy = load_data_from_db(db, index)  # load the data from the database
 
     # Plot the path of the object
 
@@ -102,15 +108,52 @@ def plot_tracking(db, index):
     plt.show()
 
 
+def get_outstanding_values(db, index):
+    t, px, py, vx, vy = load_data_from_db(db, index)  # load the data from the database
+    
+    vy_at_looping_top = min(vy)  # get the minimum y velocity
+    vx_at_looping_top = vx[vy.index(vy_at_looping_top)]  # get the x velocity at the minimum y velocity
+    v_at_looping_top = np.sqrt(vx_at_looping_top ** 2 + vy_at_looping_top ** 2)
+
+    t_at_looping_top = t[vy.index(vy_at_looping_top)]  # get the time at the minimum y velocity
+
+    vy_at_slope_end = max(vy[:t.index(t_at_looping_top)])  # get the maximum y velocity
+    vx_at_slope_end = vx[vy.index(vy_at_slope_end)]  # get the x velocity at the maximum y velocity
+    v_at_slope_end = np.sqrt(vx_at_slope_end ** 2 + vy_at_slope_end ** 2)
+
+    vy_at_looping_end = max(vy[t.index(t_at_looping_top):])  # get the maximum y velocity
+    vx_at_looping_end = vx[vy.index(vy_at_looping_end)]  # get the x velocity at the maximum y velocity
+    v_at_looping_end = np.sqrt(vx_at_looping_end ** 2 + vy_at_looping_end ** 2)
+
+    return v_at_looping_top, v_at_slope_end, v_at_looping_end
+
+
 if __name__ == "__main__":
     database = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="root",
-        database=""
+        password="root"
     )
 
     load_data_to_db(database, os.getcwd() + "/tracking")
-    plot_tracking(database, 1)
+    #plot_tracking(database, 1)
+
+    for i in range(1, 21):
+        print(i)
+
+    """t, px, py, vx, vy = load_data_from_db(database, 1)  # load the data from the database
+
+    v_at_looping_top = min(vy)  # get the minimum y velocity
+    t_at_looping_top = t[vy.index(v_at_looping_top)]  # get the time at the minimum y velocity
+
+    v_at_slope_end = max(vy[:t.index(t_at_looping_top)])  # get the maximum y velocity
+    t_at_slope_end = t[vy.index(v_at_slope_end)]  # get the time at the maximum y velocity
+
+    v_at_looping_end = max(vy[t.index(t_at_looping_top):])  # get the maximum y velocity
+    t_at_looping_end = t[vy.index(v_at_looping_end)]  # get the time at the maximum y velocity
+
+    print("Looping top velocity: " + str(v_at_looping_top) + " mm/s at " + str(t_at_looping_top) + " s")
+    print("Slope end velocity: " + str(v_at_slope_end) + " mm/s at " + str(t_at_slope_end) + " s")
+    print("Looping end velocity: " + str(v_at_looping_end) + " mm/s at " + str(t_at_looping_end) + " s")"""
 
     database.close()
