@@ -99,7 +99,7 @@ def plot_tracking(db_cursor, index):
     plt.show()
 
 
-def get_outstanding_values_per_tracking(db_cursor, index):
+def get_outstanding_values(db_cursor, index):
     t, px, py, vx, vy = load_data_from_db(db_cursor, index)  # load the data from the database
 
     vy_at_looping_top = min(vy)  # get the minimum y velocity
@@ -119,16 +119,17 @@ def get_outstanding_values_per_tracking(db_cursor, index):
     return v_at_slope_end, v_at_looping_top, v_at_looping_end
 
 
-def get_outstanding_values(db_cursor):
+def get_averages_and_uncertainties(db_cursor):
     db_cursor.fetchall()  # clear the cursor
     db_cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
-                   f"WHERE TABLE_SCHEMA = '{schema_name}';")  # query the number of tables
+                      "WHERE TABLE_SCHEMA = 'meca_project_tracking';")  # query the number of tables
     tracking_count = db_cursor.fetchall()[0][0]  # get the number of tables
 
     # get the outstanding values for each tracking
     slope_end_velocities, \
         looping_top_velocities, \
-        looping_end_velocities = zip(*[get_outstanding_values_per_tracking(db_cursor, i) for i in range(1, tracking_count + 1)])
+        looping_end_velocities = \
+        zip(*[get_outstanding_values(db_cursor, i) for i in range(1, tracking_count + 1)])
 
     # calculate the average and uncertainty of the outstanding values
     slope_end_velocity_average = np.average(slope_end_velocities)
@@ -146,22 +147,34 @@ def get_outstanding_values(db_cursor):
 
 
 if __name__ == "__main__":
-    schema_name = "meca_project_tracking"
-
     database = mysql.connector.connect(
         host="localhost",
         user="root",
         password="root"
 
-    )
+    )  # connect to the database
 
-    cursor = database.cursor()
-    cursor.execute("DROP DATABASE IF EXISTS meca_project_tracking;")  # drop the database if it exists
+    cursor = database.cursor()  # create a cursor
+    cursor.execute("DROP DATABASE IF EXISTS meca_project_tracking;")  # delete the database if it exists
     cursor.execute("CREATE DATABASE meca_project_tracking;")  # create the database
-    cursor.execute(f"USE {schema_name};")  # select the database
+    cursor.execute("USE meca_project_tracking;")  # select the database
 
     load_data_to_db(cursor, os.getcwd() + "/tracking")  # load the data to the database
 
+    # get the averages and uncertainties
+    slope_end_velocity_data, \
+        looping_top_velocity_data, \
+        looping_end_velocity_data = \
+        get_averages_and_uncertainties(cursor)
 
+    print("Slope end velocity: " + str(np.round(slope_end_velocity_data[0] / 1000, 3)) +
+          " ± " + str(np.round(slope_end_velocity_data[1] / 1000, 3)) + " m/s")
+    print("Looping top velocity: " + str(np.round(looping_top_velocity_data[0] / 1000, 3)) +
+          " ± " + str(np.round(looping_top_velocity_data[1] / 1000, 3)) + " m/s")
+    print("Looping end velocity: " + str(np.round(looping_end_velocity_data[0] / 1000, 3)) +
+          " ± " + str(np.round(looping_end_velocity_data[1] / 1000, 3)) + " m/s")
 
-    database.close()
+    plot_tracking(cursor, 1)
+
+    cursor.close()  # close the cursor
+    database.close()  # close the database
