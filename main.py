@@ -18,27 +18,6 @@ class MechanicalStudy:
         self.v0 = v0
         self.p0 = p0
 
-    def annotate_point(self, t, color):
-        """
-        Annotate the point at time i with the acceleration, velocity and position
-        :param t: time in seconds
-        :param color: color of the annotation
-        """
-
-        closest_index = (np.abs(self.time - t)).argmin()
-        closest = [
-            (self.get_values_on_interval()[0][closest_index], 'a'),
-            (self.get_values_on_interval()[1][closest_index], 'v'),
-            (self.get_values_on_interval()[2][closest_index], 'p'),
-        ]
-
-        for closest_val, closest_label in closest:
-            plt.scatter(t, closest_val, color=color)
-            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -10), ha='center', color=color)
-            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
-                         xytext=(10, -20), ha='center', color=color)
-
 
 class Slope(MechanicalStudy):
     def __init__(self, duration, interval, alpha, v0, p0, mu=0.0, is_alpha_degrees=False):
@@ -116,7 +95,16 @@ class Slope(MechanicalStudy):
         :return: time in seconds
         """
 
-        return np.sqrt(2 * p / (self.g * np.sin(self.alpha) * (1 - self.mu)))
+        a = self.g * (np.sin(self.alpha) - self.mu * np.cos(self.alpha)) / 2
+        b = self.v0[0]
+        c = self.p0[0] - p
+
+        delta = b ** 2 - 4 * a * c
+
+        if delta < 0:
+            raise ValueError("no solution")
+
+        return (-b + np.sqrt(delta)) / (2 * a)
 
     def get_v_end_terms_of_height(self, height):
         """
@@ -129,6 +117,27 @@ class Slope(MechanicalStudy):
             raise ValueError("height must be positive")
 
         return self.v(self.get_t_at_p(height / np.sin(self.alpha)))
+
+    def annotate_point(self, t, color):
+        """
+        Annotate the point at time i with the acceleration, velocity and position
+        :param t: time in seconds
+        :param color: color of the annotation
+        """
+
+        closest_index = (np.abs(self.time - t)).argmin()
+        closest = [
+            (self.get_values_on_interval()[0][closest_index], 'a'),
+            (self.get_values_on_interval()[1][closest_index], 'v'),
+            (self.get_values_on_interval()[2][closest_index], 'p'),
+        ]
+
+        for closest_val, closest_label in closest:
+            plt.scatter(t, closest_val, color=color)
+            plt.annotate(f'{closest_label} = {closest_val:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -10), ha='center', color=color)
+            plt.annotate(f't = {t:.2f}', (t, closest_val), textcoords='offset points',
+                         xytext=(10, -20), ha='center', color=color)
 
     def trace(self, *args):
         """"
@@ -153,19 +162,23 @@ class Slope(MechanicalStudy):
         plt.legend()
         plt.show()
 
-    def trace_v_end_terms_of_height(self, ceil, interval):
+    def trace_v_end_terms_of_height(self, limits, interval):
         """
         Trace the velocity as a function of the height
-        :param ceil: maximum height in meters
+        :param limits: tuple of minimum and maximum height in meters
         :param interval: interval between each height in meters
         """
 
         if interval <= 0:
             raise ValueError("interval must be positive")
 
-        height = np.arange(0, ceil + interval, interval)
-        plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Velocity (m/s)")
+        height = np.arange(limits[0], limits[1] + interval, interval)
+        plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Velocity with friction (m/s)")
+        self.mu = 0.0
+        plt.plot(height, [self.get_v_end_terms_of_height(h)[2] for h in height], label="Velocity without friction (m/s)")
         plt.title("Velocity as a function of the height")
+        plt.gca().set_xlabel("Height (m)")
+        plt.gca().set_ylabel("Velocity (m/s)")
         plt.legend()
         plt.show()
 
@@ -214,7 +227,7 @@ class Looping(MechanicalStudy):
         return [
             fp,
             - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (
-                        self.g * np.cos(f) * self.mu / self.radius) + 8
+                    self.g * np.cos(f) * self.mu / self.radius)
         ]
 
     def solv_equation(self):
@@ -398,53 +411,69 @@ class Ravine(MechanicalStudy):
 
         return odeint(self.build_equation, (self.p0[0], self.p0[1], self.v0[0], self.v0[1]), self.time)
 
-    def trace(self, *args):
+
+    def trace(self):
         """
         Trace the path of the object
-        :param args: Times to annotate
         """
 
-        if self.sc_z > 0.0 or self.sc_x > 0.0:
-            path = plt.subplot2grid((2, 2), (0, 0), colspan=2)
-            velocity = plt.subplot2grid((2, 2), (1, 0))
-            position = plt.subplot2grid((2, 2), (1, 1))
+        x, y = self.solv_equation()[:, 0], self.solv_equation()[:, 1]
 
-            plt.subplots_adjust(wspace=0.5, hspace=0.5)
+        x_with_y = (np.abs(np.array(y, dtype=float) + self.ravine_dim[1])).argmin()
+        x_1 = x[x_with_y]
+        y_1 = y[x_with_y]
+        plt.axvline(x=x_1, color="red", label="Impact depending on max Y")
+        plt.axhline(y=y_1, color="orange", label="Max Y")
+        plt.scatter(x_1, y_1, color="black")
+        plt.annotate(f'X = {x_1:.2f}', (x_1 - 0.15, y_1 - 0.015), textcoords='offset points',
+                     xytext=(10, -10), ha='center', color="red")
+        plt.annotate(f'Y = {y_1:.2f}', (x_1 - 0.15, y_1 - 0.015), textcoords='offset points',
+                     xytext=(10, -20), ha='center', color="orange")
 
-            path.plot(self.solv_equation()[:, 0], self.solv_equation()[:, 1], label="Path")
-            path.set_title("Path of the object")
-            path.legend()
+        print(f"X = {x_1} , Y = {y_1}")
 
-            velocity.plot(self.time, self.solv_equation()[:, 0], label="Velocity (m/s)")
-            velocity.set_title("Velocity as a function of time")
-            velocity.legend()
+        y_for_x = (np.abs(np.array(x, dtype=float) - self.ravine_dim[0])).argmin()
+        x_2 = x[y_for_x]
+        y_2 = y[y_for_x]
+        plt.axvline(x=x[y_for_x], color="green", label="Max X")
+        plt.axhline(y=y[y_for_x], color="blue", label="Impact depending on max X")
+        plt.scatter(x_2, y_2, color="black")
+        plt.annotate(f'X = {x_2:.2f}', (x_2 - 0.15, y_2 - 0.015), textcoords='offset points',
+                     xytext=(10, -10), ha='center', color="green")
+        plt.annotate(f'Y = {y_2:.2f}', (x_2 - 0.15, y_2 - 0.015), textcoords='offset points',
+                     xytext=(10, -20), ha='center', color="blue")
 
-            position.plot(self.time, self.solv_equation()[:, 1], label="Position (m)")
-            position.set_title("Position as a function of time")
-            position.legend()
-        else:
-            plt.plot(self.time, self.get_values_on_interval()[0], label="Acceleration (m/s^2)")
-            plt.plot(self.time, self.get_values_on_interval()[1], label="Velocity (m/s)")
-            plt.plot(self.time, self.get_values_on_interval()[2], label="Position (m)")
+        print(f"X = {x_2} , Y = {y_2}")
 
-            for i in args:
-                color = "#" + ''.join([random.choice('0123456789ABCDEF') for i in range(6)])
+        plt.plot(x, y, label="Path with friction (m)")
 
-                if i > self.time[-1] or i < 0:
-                    raise ValueError("t must be in [0 ; {}]".format(self.time[-1]))
+        x, y = [], []
 
-                plt.axvline(x=i, color=color)
-                self.annotate_point(i, color)
+        sc_x = self.sc_x
+        sc_z = self.sc_z
 
-            plt.title("Acceleration, velocity and position as a function of time")
-            plt.legend()
+        self.sc_x = 0.0
+        self.sc_z = 0.0
+
+        for t in self.time:
+            x.append(self.p_no_friction(t)[0])
+            y.append(self.p_no_friction(t)[1])
+
+        plt.plot(x, y, label="Path without friction (m)")
+
+        plt.gca().set_xlabel("X position (m)")
+        plt.gca().set_ylabel("Y position (m)")
+        plt.legend()
+
+        self.sc_x = sc_x
+        self.sc_z = sc_z
 
         plt.show()
 
 
 if __name__ == "__main__":
     """Generic parameters"""
-    study_duration = 1.5  # in seconds
+    study_duration = 1  # in seconds
     study_interval = 0.01  # in seconds
     car_mass = 0.03  # in kg
     friction_coefficient = 0.002  # coefficient of friction with the ground
@@ -455,12 +484,12 @@ if __name__ == "__main__":
     slope_v0 = (0, 0)  # v0x, v0y in m/s
     slope_p0 = (0, 0)  # p0x, p0y in m
 
-    slope_ceil = 5  # in meters
+    slope_limits = (0, 5)  # in meters
     slope_height_interval = 0.01  # in meters
 
     """Looping parameters"""
     looping_radius = 0.115  # in meters
-    looping_p0 = 90  # in degrees
+    looping_p0 = 0  # in degrees
 
     """Ravine parameters"""
     ravine_length = 0.7  # in meters
@@ -473,7 +502,7 @@ if __name__ == "__main__":
                   mu=friction_coefficient, is_alpha_degrees=True)
 
     slope.trace(slope.get_t_at_p(slope_height / np.sin(np.radians(slope_angle))))
-    slope.trace_v_end_terms_of_height(ceil=slope_ceil, interval=slope_height_interval)
+    slope.trace_v_end_terms_of_height(limits=slope_limits, interval=slope_height_interval)
 
     v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
     print("Velocity at the end of the slope: {} m/s".format(v_at_slope_end))
@@ -488,7 +517,7 @@ if __name__ == "__main__":
     print("Velocity at the end of the looping: {} m/s".format(looping.get_v_after_looping(v_in_ms=True)))
 
     # Find the height of the slope to have just the right velocity to pass the looping
-    while looping.get_min_velocity(v_in_ms=True) > v_at_slope_end:
+    while looping.get_min_velocity(v_in_ms=True) < v_at_slope_end:
         slope_height -= 0.1
         v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
 
