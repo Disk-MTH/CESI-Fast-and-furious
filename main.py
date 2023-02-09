@@ -70,7 +70,7 @@ class Slope(MechanicalStudy):
         :return: tuple of the acceleration (ax, ay, a)
         """
 
-        ax = self.g * np.sin(self.alpha) * (1 - self.mu)
+        ax = self.g * (np.sin(self.alpha) - self.mu * np.cos(self.alpha))
         ay = 0
 
         return ax, ay, np.sqrt(ax ** 2 + ay ** 2)
@@ -82,7 +82,7 @@ class Slope(MechanicalStudy):
         :return: tuple of the velocity (vx, vy, v)
         """
 
-        vx = self.g * np.sin(self.alpha) * (1 - self.mu) * t + self.v0[0]
+        vx = (self.g * (np.sin(self.alpha) - self.mu * np.cos(self.alpha))) * t + self.v0[0]
         vy = self.v0[1]
 
         return vx, vy, np.sqrt(vx ** 2 + vy ** 2)
@@ -94,7 +94,7 @@ class Slope(MechanicalStudy):
         :return: tuple of the position (px, py, p)
         """
 
-        px = self.g * np.sin(self.alpha) * (1 - self.mu) * t ** 2 / 2 + self.v0[0] * t + self.p0[0]
+        px = (self.g * (np.sin(self.alpha) - self.mu * np.cos(self.alpha))) * t ** 2 / 2 + self.v0[0] * t + self.p0[0]
         py = self.v0[1] * t + self.p0[1]
 
         return px, py, np.sqrt(px ** 2 + py ** 2)
@@ -213,7 +213,8 @@ class Looping(MechanicalStudy):
 
         return [
             fp,
-            - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (self.g * np.cos(f) * self.mu / self.radius) + 8
+            - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (
+                        self.g * np.cos(f) * self.mu / self.radius) + 8
         ]
 
     def solv_equation(self):
