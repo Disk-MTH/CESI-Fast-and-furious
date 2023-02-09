@@ -213,7 +213,7 @@ class Looping(MechanicalStudy):
 
         return [
             fp,
-            - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (self.g * np.cos(f) * self.mu / self.radius)
+            - (self.g * np.sin(f) / self.radius) - (self.mu * fp ** 2) - (self.g * np.cos(f) * self.mu / self.radius) + 8
         ]
 
     def solv_equation(self):
@@ -283,7 +283,7 @@ class Looping(MechanicalStudy):
             row_2.plot(self.time, self.solv_equation()[:, 1] * self.radius, label="Angular velocity (m/s)")
         else:
             row_2.plot(self.time, self.solv_equation()[:, 1], label="Angular velocity (rad/s)")
-        row_2.set_title("Angular as a function of time")
+        row_2.set_title("Angular velocity as a function of time")
         row_2.legend()
 
         plt.show()
@@ -487,7 +487,7 @@ if __name__ == "__main__":
     print("Velocity at the end of the looping: {} m/s".format(looping.get_v_after_looping(v_in_ms=True)))
 
     # Find the height of the slope to have just the right velocity to pass the looping
-    while looping.get_min_velocity(v_in_ms=True) < v_at_slope_end:
+    while looping.get_min_velocity(v_in_ms=True) > v_at_slope_end:
         slope_height -= 0.1
         v_at_slope_end = slope.get_v_end_terms_of_height(slope_height)[2]
 
@@ -498,4 +498,3 @@ if __name__ == "__main__":
                     mass=car_mass, v0=(looping.get_v_after_looping(v_in_ms=True), 0), p0=(0, 0),
                     sc_x=ravine_drag_coefficient, sc_z=ravine_lift_coefficient)
     ravine.trace()
-
